@@ -17,6 +17,8 @@ import (
 // for a DOM element, but it can not be located.
 var ErrNotFound = errors.New("element not found")
 
+const minTimeout = time.Millisecond * 250
+
 type action func(interface{}, ...cdp.QueryOption) cdp.Action
 
 // Browser represents a Chrome browser controlled by chromedp.
@@ -24,12 +26,13 @@ type Browser struct {
 	ctx           context.Context
 	cdp           *cdp.CDP
 	cancelContext context.CancelFunc
+	timeout       time.Duration
 }
 
 // New instantiates a new Chrome browser and returns
 // a *Browser used to control it.
 func New() (*Browser, error) {
-	b := &Browser{}
+	b := &Browser{timeout: time.Second * 5}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c, err := cdp.New(ctx)
@@ -42,6 +45,15 @@ func New() (*Browser, error) {
 	b.cancelContext = cancel
 
 	return b, nil
+}
+
+// SetTimeout accepts a time.Duration. This duration will
+// be used as the maximum timeout when waiting for a node to exist.
+func (b *Browser) SetTimeout(d time.Duration) {
+	if d < minTimeout {
+		d = minTimeout
+	}
+	b.timeout = d
 }
 
 // Close cleans up the *Browser; this should be called
@@ -60,6 +72,13 @@ func (b *Browser) Navigate(url string) error {
 	return b.cdp.Run(b.ctx, cdp.Navigate(url))
 }
 
+// MustNavigate calls Navigate and ends execution on error.
+func (b *Browser) MustNavigate(url string) {
+	if err := b.Navigate(url); err != nil {
+		log.Fatalf("Failed to navigate to %q: %s\n", url, err)
+	}
+}
+
 // Location returns the current URL.
 func (b *Browser) Location() (string, error) {
 	var location string
@@ -75,6 +94,13 @@ func (b *Browser) SendKeys(xpath, value string) error {
 	return b.cdp.Run(b.ctx, cdp.SendKeys(xpath, value))
 }
 
+// MustSendKeys sends keystrokes to a DOM element or halts execution.
+func (b *Browser) MustSendKeys(xpath, value string) {
+	if err := b.SendKeys(xpath, value); err != nil {
+		log.Fatalf("Failed to send %q to %q: %s\n", value, xpath, err)
+	}
+}
+
 // Click performs a mouse click on a DOM element.
 func (b *Browser) Click(xpath string) error {
 	if err := b.FindElement(xpath); err != nil {
@@ -83,10 +109,17 @@ func (b *Browser) Click(xpath string) error {
 	return b.cdp.Run(b.ctx, cdp.Click(xpath))
 }
 
+// MustClick performs a mouse click or ends the program.
+func (b *Browser) MustClick(xpath string) {
+	if err := b.Click(xpath); err != nil {
+		log.Fatalf("Failed to click %q: %s\n", xpath, err)
+	}
+}
+
 // GetSource returns the HTML source from the browser tab.
 func (b *Browser) GetSource() (string, error) {
 	var html string
-	err := b.cdp.Run(b.ctx, cdp.OuterHTML("/*", &html))
+	err := b.cdp.Run(b.ctx, cdp.OuterHTML("html", &html))
 	return html, err
 }
 
@@ -173,21 +206,19 @@ func (b *Browser) ClickNode(xpath string) error {
 
 // FindElement attempts to locate a DOM element.
 func (b *Browser) FindElement(xpath string) error {
-	wait := time.Millisecond * 100
+	max := int(b.timeout / minTimeout)
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < max; i++ {
 		attempt := i + 1
-		time.Sleep(wait)
+		time.Sleep(minTimeout)
 		nodes, err := b.GetNodes(xpath)
 		if err != nil {
 			log.Printf("Error getting nodes during attempt %d\n", attempt)
 			continue
 		}
 		if len(nodes) > 0 {
-			log.Printf("Attempt %d found %d nodes\n", attempt, len(nodes))
 			return nil
 		}
-		wait = wait * 2
 	}
 	return ErrNotFound
 }
