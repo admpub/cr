@@ -105,11 +105,8 @@ func (b *Browser) ClickByXY(xpath string) error {
 	if err := b.FindElement(xpath); err != nil {
 		return err
 	}
-	log.Printf("sleeping\n")
 	time.Sleep(time.Second * 5)
-	log.Printf("done sleeping\n")
 	x, y, err := b.GetTopLeft(xpath)
-	log.Printf("GetTopLeft returned %d %d\n", x, y)
 	if err != nil {
 		return err
 	}
@@ -139,7 +136,6 @@ func (b *Browser) GetTopLeft(xpath string) (int64, int64, error) {
 			return 0, 0, err
 		}
 	}
-	log.Printf("GetTopLeft found %.2f %.2f\n", top, left)
 	return int64(top) + 1, int64(left) + 1, err
 }
 
@@ -162,7 +158,6 @@ func (b *Browser) ClickNode(xpath string) error {
 			err = ErrNotFound
 			continue
 		}
-		log.Printf("Found %d %q nodes\n", len(nodes), xpath)
 		for i, node := range nodes {
 			err = b.cdp.Run(b.ctx, cdp.MouseClickNode(node))
 			if err != nil {
@@ -170,7 +165,6 @@ func (b *Browser) ClickNode(xpath string) error {
 				continue
 			}
 		}
-		log.Printf("clickNode for %s successful on attempt %d\n", xpath, i+1)
 		err = nil
 		break
 	}
@@ -179,13 +173,11 @@ func (b *Browser) ClickNode(xpath string) error {
 
 // FindElement attempts to locate a DOM element.
 func (b *Browser) FindElement(xpath string) error {
-	log.Printf("In FindElement for %q\n", xpath)
 	wait := time.Millisecond * 100
 
 	for i := 0; i < 8; i++ {
 		attempt := i + 1
 		time.Sleep(wait)
-		log.Printf("FindElement attempt %d %q\n", attempt, xpath)
 		nodes, err := b.GetNodes(xpath)
 		if err != nil {
 			log.Printf("Error getting nodes during attempt %d\n", attempt)
