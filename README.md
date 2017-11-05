@@ -27,7 +27,6 @@ func main() {
     if err := browser.Navigate("https://google.com"); err != nil {
         log.Fatalf("Couldn't navigate to page: %s\n", err)
     }
-    time.Sleep(time.Second * 5)
 
     if err := browser.SendKeys("//input[@id='lst-ib']", "The Big Lebowski"); err != nil {
         log.Fatalf("Couldn't fill out form: %s\n", err)
