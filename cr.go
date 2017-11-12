@@ -17,7 +17,7 @@ import (
 // for a DOM element, but it can not be located.
 var ErrNotFound = errors.New("element not found")
 
-const minTimeout = time.Millisecond * 250
+const minTimeout = time.Second
 
 type action func(interface{}, ...cdp.QueryOption) cdp.Action
 
@@ -104,7 +104,7 @@ func (b *Browser) MustSendKeys(xpath, value string) {
 // Click performs a mouse click on a DOM element.
 func (b *Browser) Click(xpath string) error {
 	if err := b.FindElement(xpath); err != nil {
-		return err
+		log.Printf("Couldn't find element %q: %s\n", xpath, err)
 	}
 	return b.cdp.Run(b.ctx, cdp.Click(xpath))
 }
@@ -176,7 +176,6 @@ func (b *Browser) GetTopLeft(xpath string) (int64, int64, error) {
 func (b *Browser) ClickNode(xpath string) error {
 	var err error
 	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second)
 		if err = b.FindElement(xpath); err != nil {
 			log.Printf("failed to find element for %s\n", xpath)
 			continue
@@ -206,14 +205,11 @@ func (b *Browser) ClickNode(xpath string) error {
 
 // FindElement attempts to locate a DOM element.
 func (b *Browser) FindElement(xpath string) error {
-	max := int(b.timeout / minTimeout)
-
-	for i := 0; i < max; i++ {
+	for i := 0; i < 3; i++ {
 		attempt := i + 1
-		time.Sleep(minTimeout)
 		nodes, err := b.GetNodes(xpath)
 		if err != nil {
-			log.Printf("Error getting nodes during attempt %d\n", attempt)
+			log.Printf("Error finding %q during attempt %d\n", xpath, attempt)
 			continue
 		}
 		if len(nodes) > 0 {
@@ -226,7 +222,9 @@ func (b *Browser) FindElement(xpath string) error {
 // GetNodes returns a slice of *cdp.Node from the chromedp package.
 func (b *Browser) GetNodes(xpath string) ([]*extras.Node, error) {
 	var nodes []*extras.Node
-	err := b.cdp.Run(b.ctx, cdp.Nodes(xpath, &nodes))
+	ctx, cancel := context.WithTimeout(b.ctx, b.timeout)
+	defer cancel()
+	err := b.cdp.Run(ctx, cdp.Nodes(xpath, &nodes))
 	return nodes, err
 }
 
