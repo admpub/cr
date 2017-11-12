@@ -19,8 +19,6 @@ var ErrNotFound = errors.New("element not found")
 
 const minTimeout = time.Second
 
-type action func(interface{}, ...cdp.QueryOption) cdp.Action
-
 // Browser represents a Chrome browser controlled by chromedp.
 type Browser struct {
 	ctx           context.Context
@@ -37,6 +35,7 @@ func New() (*Browser, error) {
 
 	c, err := cdp.New(ctx)
 	if err != nil {
+		cancel()
 		return b, err
 	}
 
@@ -61,7 +60,8 @@ func (b *Browser) SetTimeout(d time.Duration) {
 func (b *Browser) Close() error {
 	b.cancelContext()
 	err := b.cdp.Shutdown(b.ctx)
-	if err == nil {
+	if err != nil {
+		go b.cdp.Wait()
 		return err
 	}
 	return b.cdp.Wait()
@@ -88,9 +88,6 @@ func (b *Browser) Location() (string, error) {
 
 // SendKeys sends keystrokes to a DOM element.
 func (b *Browser) SendKeys(xpath, value string) error {
-	if err := b.FindElement(xpath); err != nil {
-		return err
-	}
 	return b.cdp.Run(b.ctx, cdp.SendKeys(xpath, value))
 }
 
@@ -103,9 +100,6 @@ func (b *Browser) MustSendKeys(xpath, value string) {
 
 // Click performs a mouse click on a DOM element.
 func (b *Browser) Click(xpath string) error {
-	if err := b.FindElement(xpath); err != nil {
-		log.Printf("Couldn't find element %q: %s\n", xpath, err)
-	}
 	return b.cdp.Run(b.ctx, cdp.Click(xpath))
 }
 
@@ -126,19 +120,12 @@ func (b *Browser) GetSource() (string, error) {
 // GetAttributes returns the HTML attributes of a DOM element.
 func (b *Browser) GetAttributes(xpath string) (map[string]string, error) {
 	attrs := make(map[string]string)
-	if err := b.FindElement(xpath); err != nil {
-		return attrs, err
-	}
 	err := b.cdp.Run(b.ctx, cdp.Attributes(xpath, &attrs))
 	return attrs, err
 }
 
 // ClickByXY clicks the browser window in a specific location.
 func (b *Browser) ClickByXY(xpath string) error {
-	if err := b.FindElement(xpath); err != nil {
-		return err
-	}
-	time.Sleep(time.Second * 5)
 	x, y, err := b.GetTopLeft(xpath)
 	if err != nil {
 		return err
@@ -149,10 +136,6 @@ func (b *Browser) ClickByXY(xpath string) error {
 // GetTopLeft returns the x, y coordinates of a DOM element.
 func (b *Browser) GetTopLeft(xpath string) (int64, int64, error) {
 	var top, left float64
-	if err := b.FindElement(xpath); err != nil {
-		log.Printf("GetTopLeft couldn't find %s: %s\n", xpath, err)
-		return 0, 0, err
-	}
 	js := fmt.Sprintf(topLeftJS, xpath)
 	var result string
 	err := b.cdp.Run(b.ctx, cdp.Evaluate(js, &result))
@@ -172,49 +155,14 @@ func (b *Browser) GetTopLeft(xpath string) (int64, int64, error) {
 	return int64(top) + 1, int64(left) + 1, err
 }
 
-// ClickNode clicks an element by node name.
-func (b *Browser) ClickNode(xpath string) error {
-	var err error
-	for i := 0; i < 5; i++ {
-		if err = b.FindElement(xpath); err != nil {
-			log.Printf("failed to find element for %s\n", xpath)
-			continue
-		}
-		var nodes []*extras.Node
-		nodes, err = b.GetNodes(xpath)
-		if err != nil {
-			log.Printf("failed to get node for %s\n", xpath)
-			continue
-		}
-		if len(nodes) < 1 {
-			err = ErrNotFound
-			continue
-		}
-		for i, node := range nodes {
-			err = b.cdp.Run(b.ctx, cdp.MouseClickNode(node))
-			if err != nil {
-				log.Printf("Error clicking %s #%d\n", xpath, i+1)
-				continue
-			}
-		}
-		err = nil
-		break
-	}
-	return err
-}
-
 // FindElement attempts to locate a DOM element.
 func (b *Browser) FindElement(xpath string) error {
-	for i := 0; i < 3; i++ {
-		attempt := i + 1
-		nodes, err := b.GetNodes(xpath)
-		if err != nil {
-			log.Printf("Error finding %q during attempt %d\n", xpath, attempt)
-			continue
-		}
-		if len(nodes) > 0 {
-			return nil
-		}
+	nodes, err := b.GetNodes(xpath)
+	if err != nil {
+		return err
+	}
+	if len(nodes) > 0 {
+		return nil
 	}
 	return ErrNotFound
 }
