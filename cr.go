@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/admpub/log"
 	extras "github.com/chromedp/cdproto/cdp"
 	cdp "github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/runner"
 )
 
 // ErrNotFound is returned when an XPATH is provided
@@ -25,15 +26,34 @@ type Browser struct {
 	cdp           *cdp.CDP
 	cancelContext context.CancelFunc
 	timeout       time.Duration
+	logger        *log.Logger
 }
 
 // New instantiates a new Chrome browser and returns
 // a *Browser used to control it.
-func New() (*Browser, error) {
-	b := &Browser{timeout: time.Second * 5}
+func New(args ...runner.CommandLineOption) (*Browser, error) {
+	b := &Browser{timeout: time.Second * 5, logger: log.GetLogger(`ChromeDP`)}
 	ctx, cancel := context.WithCancel(context.Background())
+	options := []runner.CommandLineOption{
+		runner.Flag("headless", true),
+		runner.Flag("disable-gpu", true),
+	}
+	for _, option := range args {
+		options = append(options, option)
+	}
+	run, err := runner.New(options...)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 
-	c, err := cdp.New(ctx)
+	err = run.Start(ctx)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	c, err := cdp.New(ctx, cdp.WithRunner(run), cdp.WithErrorf(b.logger.Errorf))
 	if err != nil {
 		cancel()
 		return b, err
@@ -143,12 +163,12 @@ func (b *Browser) GetTopLeft(xpath string) (int64, int64, error) {
 	if len(parts) == 2 {
 		top, err = strconv.ParseFloat(parts[0], 64)
 		if err != nil {
-			log.Printf("Failed to parse top coordinate: %s\n", err)
+			b.logger.Errorf("Failed to parse top coordinate: %s", err)
 			return 0, 0, err
 		}
 		left, err = strconv.ParseFloat(parts[1], 64)
 		if err != nil {
-			log.Printf("Failed to parse left coordinate: %s\n", err)
+			b.logger.Errorf("Failed to parse left coordinate: %s", err)
 			return 0, 0, err
 		}
 	}
