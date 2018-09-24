@@ -13,7 +13,7 @@ import (
     "log"
     "time"
 
-    "github.com/shawnmilo/cr"
+    "github.com/admpub/cr"
 )
 
 func main() {

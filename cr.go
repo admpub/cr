@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	cdp "github.com/knq/chromedp"
-	extras "github.com/knq/chromedp/cdp"
+	extras "github.com/chromedp/cdproto/cdp"
+	cdp "github.com/chromedp/chromedp"
 )
 
 // ErrNotFound is returned when an XPATH is provided
