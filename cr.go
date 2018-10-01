@@ -87,6 +87,16 @@ func (b *Browser) Close() error {
 	return b.cdp.Wait()
 }
 
+// RunAction run single action
+func (b *Browser) RunAction(action cdp.Action) error {
+	return b.cdp.Run(b.ctx, action)
+}
+
+// RunTasks run mutiple action
+func (b *Browser) RunTasks(actions ...cdp.Action) error {
+	return b.cdp.Run(b.ctx, cdp.Tasks(actions))
+}
+
 // Navigate sends the browser to a URL.
 func (b *Browser) Navigate(url string) error {
 	return b.cdp.Run(b.ctx, cdp.Navigate(url))
