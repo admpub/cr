@@ -10,6 +10,7 @@ import (
 
 	"github.com/admpub/log"
 	extras "github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/chromedp"
 	cdp "github.com/chromedp/chromedp"
 )
 
@@ -30,9 +31,12 @@ type Browser struct {
 
 // New instantiates a new Chrome browser and returns
 // a *Browser used to control it.
-func New(args ...cdp.ExecAllocatorOption) (*Browser, error) {
-	b := &Browser{timeout: time.Second * 5, logger: log.GetLogger(`ChromeDP`)}
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+func New(ctx context.Context, args ...cdp.ExecAllocatorOption) (*Browser, error) {
+	b := &Browser{
+		timeout: time.Second * 30,
+		logger:  log.GetLogger(`ChromeDP`),
+	}
+	ctx, cancel := context.WithTimeout(ctx, b.timeout)
 	options := append(cdp.DefaultExecAllocatorOptions[:],
 		cdp.DisableGPU,
 		cdp.Headless,
@@ -41,12 +45,10 @@ func New(args ...cdp.ExecAllocatorOption) (*Browser, error) {
 		options = append(options, option)
 	}
 
-	allocCtx, allocCancel := cdp.NewExecAllocator(ctx, options...)
-	defer allocCancel()
+	allocCtx, _ := cdp.NewExecAllocator(ctx, options...)
 
 	// also set up a custom logger
-	taskCtx, taskCancel := cdp.NewContext(allocCtx, cdp.WithLogf(b.logger.Errorf))
-	defer taskCancel()
+	taskCtx, _ := cdp.NewContext(allocCtx, cdp.WithLogf(b.logger.Errorf))
 
 	// ensure that the browser process is started
 	if err := cdp.Run(taskCtx); err != nil {
@@ -67,6 +69,12 @@ func (b *Browser) SetTimeout(d time.Duration) {
 		d = minTimeout
 	}
 	b.timeout = d
+}
+
+func (b *Browser) Context() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(b.taskCtx, b.timeout)
+	b.ctx, _ = chromedp.NewContext(ctx)
+	return b.ctx, cancel
 }
 
 // Close cleans up the *Browser; this should be called
