@@ -47,7 +47,7 @@ func New(ctx context.Context, args ...chromedp.ExecAllocatorOption) (*Browser, e
 	b.taskCtx, b.taskCtxCancel = chromedp.NewContext(b.allocCtx, chromedp.WithLogf(b.logger.Errorf))
 
 	// ensure that the browser process is started
-	if err := b.RunTasks(); err != nil {
+	if err := chromedp.Run(b.taskCtx); err != nil {
 		b.Close()
 		return b, err
 	}
